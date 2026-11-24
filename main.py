@@ -1,44 +1,54 @@
 #!/usr/bin/env python3
-"""One Line, Best Line — challenger-rC entry (c11-plants).
+"""Challenger entry for make.fun's "One Line, Best Line" bounty.
 
-Writes the locked one-line entry to <output>/entry.txt and exits 0.
-Standard library only. No rendering, no network, no reads beyond this file.
+The program's whole job is to place one fixed sentence into the file
+``entry.txt`` inside the grader's output directory, then confirm the
+file holds exactly that sentence before exiting successfully.
+
+Only the Python standard library is used. There is no network access,
+no template rendering, and no input other than this file itself.
 """
 
+from pathlib import Path
 import os
 import sys
 
-LINE = "I have watered my neighbour's plastic plants for six years, because she died in 2019 and I never had the heart to tell them."
-
-
-def pick_target_dir():
-    """Return the directory that should receive entry.txt."""
-    env_dir = os.environ.get("MAKEFUN_OUTPUT_DIR")
-    if env_dir:
-        return env_dir
-    if os.path.isdir("/output") and os.access("/output", os.W_OK):
-        return "/output"
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
+ENTRY = "I have watered my neighbour's plastic plants for six years, because she died in 2019 and I never had the heart to tell them."
 
 
 def main():
-    if not 1 <= len(LINE) <= 240:
-        print("entry line must be 1-240 characters, got %d" % len(LINE))
+    sentence = ENTRY
+
+    # The sentence has to be one non-empty line within the bounty limit.
+    if len(sentence) == 0 or len(sentence) > 240:
+        print("entry must be 1-240 characters long", file=sys.stderr)
         return 1
-    if "\n" in LINE or "\r" in LINE:
-        print("entry line must be a single line")
+    if sentence.strip() != sentence:
+        print("entry must not start or end with whitespace", file=sys.stderr)
         return 1
-    target_dir = pick_target_dir()
-    os.makedirs(target_dir, exist_ok=True)
-    target = os.path.join(target_dir, "entry.txt")
-    with open(target, "w", encoding="utf-8") as handle:
-        handle.write(LINE)
-    with open(target, "r", encoding="utf-8") as handle:
-        written = handle.read()
-    if written != LINE:
-        print("entry.txt does not match the locked line")
+    for bad in ("\n", "\r"):
+        if bad in sentence:
+            print("entry must be one line, no line breaks", file=sys.stderr)
+            return 1
+
+    # Decide where entry.txt goes: the grader's directory first, then
+    # the shared /output mount, then a folder next to this script.
+    wanted = os.environ.get("MAKEFUN_OUTPUT_DIR")
+    if wanted:
+        folder = Path(wanted)
+    elif Path("/output").is_dir() and os.access("/output", os.W_OK):
+        folder = Path("/output")
+    else:
+        folder = Path(__file__).resolve().parent / "out"
+
+    folder.mkdir(parents=True, exist_ok=True)
+    destination = folder / "entry.txt"
+    destination.write_text(sentence, encoding="utf-8")
+    if destination.read_text(encoding="utf-8") != sentence:
+        print("entry.txt does not contain the expected line", file=sys.stderr)
         return 1
-    print("wrote %d characters to %s" % (len(LINE), target))
+
+    print("entry written (%d characters) to %s" % (len(sentence), destination))
     return 0
 
 
